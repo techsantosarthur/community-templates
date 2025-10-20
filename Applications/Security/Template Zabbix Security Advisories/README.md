@@ -1,59 +1,105 @@
-# CVE Monitoring Template for Zabbix
+# CVE Monitoring for Zabbix
 
-## Description
-Centralized Zabbix template to discover and monitor CVEs affecting Zabbix components. The template uses a single master JSON item for Low-Level Discovery (LLD), extracts severity values with preprocessing, provides trigger prototypes for high/critical severities, and supports excluding already-handled CVEs via a template macro.
+This template is for Zabbix version: 6.0  
+Also available for: 7.4 7.2 7.0 6.4 6.2 
 
-## Prerequisites
-- Zabbix server **6.0** or later.  
-- Python 3.8+ recommended.
+CVE Monitoring
+Overview
+Template to discover and monitor Zabbix-related CVEs using a single master JSON item. The template performs Low-Level Discovery (LLD) from a master JSON payload, extracts severity via preprocessing, creates dependent items per CVE, provides trigger prototypes for High/Critical severities, includes a master-item health trigger, and supports excluding handled CVEs via a template macro.
 
-## Import instructions
-1. In Zabbix frontend go to **Configuration → Templates → Import**.  
-2. Select the exported template file (XML or YAML) and import it.  
-3. Link the template to the target host: **Configuration → Hosts → select host → Templates → Link new template → choose imported template**.  
-4. Create or configure the master item on the same host (see next section).
+Requirements
+Zabbix version: 6.0 and higher.
 
-## Configure master item and macros
+Tested versions
+This template has been tested on:
+- Zabbix 6.x, 7.x (import and validation recommended on your target version)
 
-### Master item
-- **Item key example**: `getCve.py[{$ZBXVERSION}]` or a custom key matching your collector.  
-- **Type**: HTTP agent / Zabbix agent / External script depending on your deployment.  
-- **Type of information**: **Text**.  
-- **Update interval**: recommended **5m**.  
-- **Returned payload**: JSON with a top-level `data` array; each discovery object must include LLD keys `{#CVENUMBER}`, `{#ZABBIXID}`, `{#ZABBIXSEVERITY}`.
+Configuration
+Zabbix should be configured according to the Templates out of the box instructions.
 
-### Template macro for excluding handled CVEs
-- **Macro name**: `{$CVE_IGNORE}`  
-- **Default value**: `^()$` (matches nothing; no CVEs ignored).  
-- To ignore one CVE: `(CVE-2022-23131)`  
-- To ignore multiple CVEs: `(CVE-2022-23131|CVE-2025-27237)`  
-- The discovery rule must use a filter: **Macro** `{#CVENUMBER}` **Condition** `does not match` **Value** `{$CVE_IGNORE}`.
+Setup
+1. Ensure you have a host to link the template and a master collector that returns JSON consumable by the discovery rule.
+2. If using the provided Python collector, install Python 3.8+ and required packages (see Master collector requirements).
+3. Import and link the template (see Import section).
 
-## Preprocessing and trigger notes
-- Severity preprocessing for the severity item:
-  1. **JSONPath**: `$.data[?(@.ZABBIXID=="{#ZABBIXID}")].ZABBIXSEVERITY`  
-  2. **Regular expression**: `^\["([^"]+)"\]$` → **Output** `\1`  
-- Master item health trigger example:
-  - **Name**: `Master item getCve.py failure — please check CVE data collection`  
-  - **Expression**: `{Template:getCve.py[{$ZBXVERSION}].nodata(10m)}=1`
+Set the master collector endpoint or script on the host and configure template macros as needed.
 
-## Testing steps
-1. Use the **Test** button in the master item to verify the raw JSON payload is returned.  
-2. Test the JSONPath preprocessing step and confirm it returns an array like `["Critical"]`.  
-3. Test the regular expression preprocessing step and confirm final output is `Critical`.  
-4. Run the discovery rule and confirm LLD creates items with `{#CVENUMBER}` and `{#ZABBIXID}`.  
-5. Add a CVE identifier to `{$CVE_IGNORE}` and run discovery again to confirm the listed CVE is no longer created.  
-6. Verify the master-item failure trigger fires when the master item stops returning data.
+Macros used
+Name — Description — Default
+{$CVE_IGNORE} — Pattern of CVE identifiers to exclude from discovery — ^()$
+{$ZBXVERSION} — Optional macro used in master item key examples — (none)
 
-## Files to include in the GitHub pull request
-- Template export file (XML or YAML) named clearly, e.g., `template-cve-monitoring.xml`.  
-- `README.md` (this file) in English.  
-- `LICENSE` file (recommended MIT or other OSI-compatible license).  
-- `CHANGELOG.md` with at least an initial entry describing version and test validation.  
-- Optional: `screenshots/` with images demonstrating preprocessing tests and discovery filter configuration.  
-- Optional: example host configuration snippets (plain text) or sample master collector script if you want to provide usage examples.
+Discovery rule and produced items
+Discovery rule
+- Source: master JSON item (text)
+- LLD macros produced: {#CVENUMBER}, {#ZABBIXID}, {#ZABBIXSEVERITY}
+- Discovery filter: {#CVENUMBER} does not match {$CVE_IGNORE}
 
-## Additional notes for PR acceptance
-- Ensure the exported XML/YAML does **not** contain any secrets or API keys.  
-- Validate the template by importing it into a clean Zabbix instance before opening the PR.  
-- In the PR description include supported Zabbix versions, brief install steps, and a short test checklist.
+Item prototypes created by discovery (examples)
+- CVE {#CVENUMBER}: Severity — Dependent item, preprocessed to store values like Critical/High/Medium
+- CVE {#CVENUMBER}: Description / Link — Dependent item, raw text
+- CVE {#CVENUMBER}: First seen — Dependent item, timestamp
+- Additional dependent items as needed (references, solution status)
+
+Template-level items
+- Master item (external/script or HTTP agent) that returns the raw JSON used by LLD
+  - Key (external script): getCve.py[{$ZBXVERSION}]
+  - Type of information: Text
+  - Recommended update interval: 1d
+
+Preprocessing notes
+- Severity extraction example:
+  1. JSONPath: $.data[?(@.ZABBIXID=="{#ZABBIXID}")].ZABBIXSEVERITY
+  2. Regex cleanup: ^\["([^"]+)"\]$ → output: \1
+- Test preprocessing steps in the item Test dialog to confirm final values (e.g., Critical)
+
+Triggers
+Trigger prototypes (discovery)
+- CVE severity (prototype)
+  - Description: Fires on High or Critical severity
+  - Example expression (prototype context): last(/Template/cve.severity[{#ZABBIXID}])="Critical" or last(/Template/cve.severity[{#ZABBIXID}])="High"
+
+Template-level triggers
+- Master item failure — please check CVE data collection
+  - Expression example: {Template:getCve.py[{$ZBXVERSION}].nodata(10m)}=1
+  - Severity: Warning (adjust as needed)
+
+Import and configuration (quick steps)
+1. Import template: Configuration → Templates → Import → upload XML/YAML.  
+2. Link template to host: Configuration → Hosts → select host → Templates → Link new template.  
+3. Create master item on that host:
+   - Key example (external script): getCve.py[{$ZBXVERSION}] or HTTP agent key matching your collector
+   - Type: External script / HTTP agent / Zabbix agent (match your collector)
+   - Type of information: Text
+   - Interval: 300s (recommended)
+   - Ensure the item returns valid JSON with a top-level `data` array and required fields.
+4. Set macro {$CVE_IGNORE} on the template (default ^()$). To ignore handled CVEs add identifiers: (CVE-2022-23131|CVE-2025-27237).
+5. Run discovery (wait next LLD or force run) and confirm items and triggers are created.
+
+Master collector (Python) requirements
+- Python 3.8+ installed on the host that runs the collector (or environment reachable by Zabbix HTTP agent).  
+- Required Python packages:
+  - requests
+- Collector expectations:
+  - Outputs valid UTF-8 JSON to stdout (external script) or HTTP response body (HTTP agent).
+  - JSON structure: top-level object with `data` array; each element must include keys used by LLD: CVE id, ZABBIXID, ZABBIXSEVERITY, description, timestamp.
+  - On failure, return empty output or a clearly detectable error so the master-item failure trigger can fire.
+
+Testing checklist
+- Master item returns valid JSON (use Test button).  
+- Severity preprocessing returns plain value (e.g., Critical).  
+- LLD creates items with {#CVENUMBER} and {#ZABBIXID}.  
+- Adding a CVE to {$CVE_IGNORE} prevents that CVE from being discovered on the next LLD run.  
+- Stopping the collector triggers the master-item failure alert (nodata(10m)).
+
+Files included in this template package
+- getCve.py
+- template-cve-monitoring.xml (exported template)  
+- README.md (this file)  
+
+Feedback
+Please report any issues with the template at https://support.zabbix.com or via the Zabbix community repository PR/discussion.
+
+Notes
+- Remove any credentials or host-specific identifiers from the exported XML before publishing.  
+- Validate import on a clean Zabbix instance before submitting a Pull Request.
