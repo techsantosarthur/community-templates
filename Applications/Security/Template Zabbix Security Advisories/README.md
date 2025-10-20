@@ -4,10 +4,8 @@
 Centralized Zabbix template to discover and monitor CVEs affecting Zabbix components. The template uses a single master JSON item for Low-Level Discovery (LLD), extracts severity values with preprocessing, provides trigger prototypes for high/critical severities, and supports excluding already-handled CVEs via a template macro.
 
 ## Prerequisites
-- Zabbix server **5.0** or later.  
-- Zabbix frontend account with permissions to **import templates** and **edit templates**.  
-- A host able to run or receive the **master collector** (script or HTTP agent) that returns JSON text.  
-- Knowledge to edit template macros and discovery rule filters.
+- Zabbix server **6.0** or later.  
+- Python 3.8+ recommended.
 
 ## Import instructions
 1. In Zabbix frontend go to **Configuration → Templates → Import**.  
